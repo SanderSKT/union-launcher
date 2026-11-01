@@ -7,9 +7,22 @@
     <Nullable>enable</Nullable>
     <AssemblyName>UnionLauncher</AssemblyName>
     <RootNamespace>UnionLauncher</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.2</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+  <!-- Public key is embedded at publish time; no key means updates are disabled. -->
+  <ItemGroup Condition="'$(UnionUpdatePublicKeyBase64)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>UNIONLauncherUpdatePublicKey</_Parameter1>
+      <_Parameter2>$(UnionUpdatePublicKeyBase64)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup Condition="'$(UnionDefaultApiOrigin)' != ''">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>UNIONDefaultApiOrigin</_Parameter1>
+      <_Parameter2>$(UnionDefaultApiOrigin)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
