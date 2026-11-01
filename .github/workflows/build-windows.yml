@@ -43,6 +43,7 @@ jobs:
           & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- verify (Join-Path $release "manifest.json") (Join-Path $release "UNIONSetup.exe") $public *> $null
           if ($LASTEXITCODE -eq 0) { throw "Tampered installer was ACCEPTED" }
           Write-Host "Signing verification and tamper detection passed."
+          $global:LASTEXITCODE = 0
 
       - name: Build portable launcher (public key optional)
         shell: pwsh
