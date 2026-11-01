@@ -1,0 +1,54 @@
+# .NET / Visual Studio / Rider / VS Code
+**/bin/
+**/obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.rsuser
+TestResults/
+**/publish/
+artifacts/
+ 
+# Build outputs and packaged installers (publish via Releases)
+*.exe
+*.dll
+*.pdb
+*.msi
+*.msix
+*.nupkg
+*.zip
+*.7z
+*.rar
+
+# Local config and credentials
+.env
+.env.*
+!.env.example
+**/secrets.json
+**/appsettings.Production.json
+**/appsettings.Local.json
+**/credentials.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.cer
+*.p8
+
+# User data, logs and caches
+*.log
+*.dmp
+*.db
+*.sqlite
+*.sqlite3
+**/logs/
+**/cache/
+**/temp/
+**/backups/
+**/downloads/
+**/Versions/
+.DS_Store
+Thumbs.db
