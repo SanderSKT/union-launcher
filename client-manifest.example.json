@@ -1,0 +1,8 @@
+{
+  "client": "2018M",
+  "version": "2018M-1",
+  "downloadUrl": "https://downloads.example.org/union/2018m-client.zip",
+  "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_DIGITS",
+  "sizeBytes": 0,
+  "executable": "RobloxPlayerBeta.exe"
+}
