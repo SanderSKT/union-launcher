@@ -11,6 +11,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <!-- Public key is embedded at publish time; no key means updates are disabled. -->
   <ItemGroup Condition="'$(UnionUpdatePublicKeyBase64)' != ''">
@@ -24,5 +25,11 @@
       <_Parameter1>UNIONDefaultApiOrigin</_Parameter1>
       <_Parameter2>$(UnionDefaultApiOrigin)</_Parameter2>
     </AssemblyAttribute>
+  </ItemGroup>
+  <!-- Exclude nested signing tools and their generated obj/ sources from the GUI app. -->
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="LauncherWindow.cs" />
+    <Compile Include="LauncherSelfUpdater.cs" />
   </ItemGroup>
 </Project>
