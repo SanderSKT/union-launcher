@@ -1,0 +1,45 @@
+name: Build Windows launcher
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish portable self-contained launcher
+        run: dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=false
+
+      - name: Generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $exe = "bin/Release/net10.0-windows/win-x64/publish/UnionLauncher.exe"
+          if (!(Test-Path -LiteralPath $exe)) { throw "UnionLauncher.exe was not built" }
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  UnionLauncher.exe" | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Get-Item $exe | Select-Object Name,Length
+          Get-Content SHA256SUMS.txt
+
+      - name: Upload build artifact (testing only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: union-launcher-win-x64-unsigned
+          path: |
+            bin/Release/net10.0-windows/win-x64/publish/UnionLauncher.exe
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
