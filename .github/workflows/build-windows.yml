@@ -21,25 +21,81 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Publish portable self-contained launcher
-        run: dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=false -p:UnionDefaultApiOrigin=https://union.cool
+      - name: Build portable launcher (public key optional)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $argsList = @(
+            'publish', 'UnionLauncher.csproj', '-c', 'Release', '-r', 'win-x64',
+            '--self-contained', 'true', '-p:PublishSingleFile=true',
+            '-p:PublishReadyToRun=false', '-p:UnionDefaultApiOrigin=https://union.cool'
+          )
+          $publicFile = "update-signing/launcher-update-public.spki.b64"
+          if (Test-Path -LiteralPath $publicFile) {
+            $key = (Get-Content -LiteralPath $publicFile -Raw).Trim()
+            if ($key -cnotmatch '^[A-Za-z0-9+/=]{100,4096}$') { throw "Invalid pinned public key." }
+            try { $null = [Convert]::FromBase64String($key) } catch { throw "Invalid key base64." }
+            $argsList += ('-p:UnionUpdatePublicKeyBase64=' + $key)
+            "Signed-manifest verification: ENABLED" | Set-Content BUILD-INFO.txt
+          } else {
+            "Signed-manifest verification: DISABLED (no pinned public key)" | Set-Content BUILD-INFO.txt
+          }
+          & dotnet @argsList
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
+          $project = [xml](Get-Content -LiteralPath UnionLauncher.csproj -Raw)
+          "Source version: $($project.Project.PropertyGroup.Version)" | Add-Content BUILD-INFO.txt
 
-      - name: Generate SHA-256 checksum
+      - name: Generate SHA-256 for portable executable
         shell: pwsh
         run: |
           $exe = "bin/Release/net10.0-windows/win-x64/publish/UnionLauncher.exe"
           if (!(Test-Path -LiteralPath $exe)) { throw "UnionLauncher.exe was not built" }
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  UnionLauncher.exe" | Set-Content -Path SHA256SUMS.txt -Encoding ascii
-          Get-Item $exe | Select-Object Name,Length
+          "$hash  UnionLauncher.exe" | Set-Content SHA256SUMS.txt -Encoding ascii
+          Get-Content BUILD-INFO.txt
           Get-Content SHA256SUMS.txt
 
-      - name: Upload build artifact (testing only)
+      - name: Upload portable build (testing only)
         uses: actions/upload-artifact@v4
         with:
           name: union-launcher-win-x64-unsigned
           path: |
             bin/Release/net10.0-windows/win-x64/publish/UnionLauncher.exe
             SHA256SUMS.txt
+            BUILD-INFO.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Install Inno Setup (only after public key is pinned)
+        if: hashFiles('update-signing/launcher-update-public.spki.b64') != ''
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path -LiteralPath $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+
+      - name: Build versioned Inno installer (requires pinned key)
+        if: hashFiles('update-signing/launcher-update-public.spki.b64') != ''
+        shell: pwsh
+        run: |
+          $project = [xml](Get-Content UnionLauncher.csproj -Raw)
+          $version = [string]$project.Project.PropertyGroup.Version
+          & ./installer/Build-UNIONSetup.ps1 -ReleaseVersion $version -UpdatePublicKeyFile "update-signing/launcher-update-public.spki.b64"
+          if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
+          $exe = "installer/releases/$version/UNIONSetup.exe"
+          if (!(Test-Path -LiteralPath $exe)) { throw "Installer was not produced" }
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  UNIONSetup.exe" | Set-Content installer/SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload installer (for manual testing; not yet a Release)
+        if: hashFiles('update-signing/launcher-update-public.spki.b64') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: union-setup-win-x64-unsigned
+          path: |
+            installer/output/UNIONSetup.exe
+            installer/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

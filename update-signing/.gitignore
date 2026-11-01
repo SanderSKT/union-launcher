@@ -1,0 +1,8 @@
+# Public, trusted client-side key is checked into update-signing after generation.
+# This folder must NEVER contain private .pk8/.pfx files or encrypted key backups.
+*.pk8
+*.key
+*.pem
+*.pfx
+*.p12
+!launcher-update-public.spki.b64

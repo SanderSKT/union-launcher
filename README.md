@@ -1,54 +1,60 @@
 # UNION Launcher
 
-Source code for **UNION Launcher v0.2.2** — a Windows x64 / .NET 10 Windows Forms launcher for the independent UNION legacy-client project.
+Official source for the Windows **UNION Launcher** — an independent, closed-alpha legacy-client project. Not affiliated with Roblox Corporation.
 
-> **Closed alpha / test build.** UNION is not affiliated with or endorsed by Roblox Corporation. This repository does not contain Roblox client binaries or RCCService. A successful build is not a security certification or an official public release.
+## Features
 
-## Current features
+- C# WinForms / .NET 10 (Windows x64), classic Roblox 2018M install and `union://` website Play.
+- Client archive download with size/SHA-256 verification, versioned installation and shared resources.
+- Installed-client status, update checks, Developer settings and duplicate-process guard.
+- **Launcher self-update:** verifies a signed manifest with an embedded RSA-PSS/SHA-256 public key, verifies the downloaded Inno Setup installer's size/hash, then asks permission to install it.
+- `https://union.cool` is the default API for CI-built binaries. Developer builds can still use a local origin.
 
-- Dark themed launcher interface with **ROBLOX 2018M**, installed-version display, update check, and a website shortcut.
-- An expandable **Developer settings** section for API and manifest overrides.
-- Downloads a client ZIP and checks declared size and SHA-256, then installs into `%LOCALAPPDATA%\UNION\Versions\2018M`.
-- Installs required 2018M shared content and supports staging / rollback of a versioned install.
-- Registers `union://` for the current Windows user and redeems one-time Play codes through the UNION API.
-- Detects a running Roblox instance to avoid launching duplicates.
-- Includes **optional signed launcher-update support** in `LauncherSelfUpdater.cs`. It is **disabled** unless a trusted RSA update public key is supplied at build time. This GitHub workflow does not supply a key.
+## Self-update bootstrap (v0.2.3)
 
-## Building
+**Signing is disabled until the project owner generates and commits the PUBLIC verification key.**
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
+On a trusted Windows PC with .NET 10 SDK and Git, clone this repo. Run:
 
 ```powershell
-dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=false
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Prepare-UpdateSigning.ps1
 ```
 
-For builds intended to connect to the public UNION API automatically:
+This generates an RSA key pair **outside this repository**, under your user profile's `UNION-Private-Backups/launcher-update-signing/`. It copies **only the public key** to `update-signing/launcher-update-public.spki.b64` inside the repo. Verify `git status` and commit only this PUBLIC file. Back up the private key encrypted and keep it offline. It is needed to sign all subsequent updates, and losing it means existing launchers will not trust replacement keys.
+
+The next GitHub Actions build will embed the public key. It will produce both a portable test EXE and an unsigned **Inno Setup installer** (each with SHA-256 checksums). Download `union-setup-win-x64-unsigned` from Actions, extract `UNIONSetup.exe`, and test it on the existing Windows VM or a separate Windows account. This is a **one-time manual installation** for existing launchers without an embedded key. The installer preserves client files in `%LOCALAPPDATA%/UNION`, uses the same AppId for subsequent upgrades, and registers `union://` with the user's consent if another handler already owns it.
+
+## Subsequent update releases (e.g. v0.2.4)
+
+1. Update the source and bump `<Version>` in `UnionLauncher.csproj` (never reuse an existing version number for different bytes).
+2. Build/download the versioned `UNIONSetup.exe` with the **same pinned public key**.
+3. On the trusted PC, sign a manifest offline:
 
 ```powershell
-dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=false -p:UnionDefaultApiOrigin=https://union.cool
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Sign-LauncherRelease.ps1 -Version 0.2.4 -SetupFile "C:\path\to\UNIONSetup.exe"
 ```
 
-The GitHub Actions workflow embeds `https://union.cool` by default and uploads a **test-only, unsigned** Windows x64 build with `SHA256SUMS.txt` to workflow artifacts. The output executable is under `bin/Release/net10.0-windows/win-x64/publish/UnionLauncher.exe`.
+4. Copy only `UNIONSetup.exe` and `manifest.json` from `installer/signed-releases/0.2.4/` to the VPS. **Never upload the private key.**
+5. On the VPS, install the isolated PHP routes once using `server/Install-UpdateRoutes.ps1`, then use `server/Stage-UpdateRelease.ps1 -SourceDirectory ...` to stage a release. The update API defaults to **disabled**. Only after verifying the deployment should you set `launcher_updates_enabled => true` in your private PHP config.
+6. Launch the signed-key bootstrap installer normally. On subsequent starts it checks `https://union.cool/api/union/launcher/update`. If an update is available and its signature verifies, the user can install it.
 
-A manually installed launcher from an earlier version may already be registered as the `union://` protocol handler. Do not overwrite your working handler before testing a new build in isolation.
+The official public endpoint paths are `GET /api/union/launcher/update` and `GET /api/union/launcher/installer`. The release installer and manifest remain outside the backend web root. The manifest signature covers version, size, SHA-256 and URL and uses a **fixed key embedded in the launcher**, not a key provided by the server.
 
-## Repository contents
+## Build locally
 
-- `LauncherWindow.cs` — UI, client installation and game launch
-- `LauncherSelfUpdater.cs` — optional signed launcher-update checks and verified installer downloads
-- `Program.cs` and `UnionLauncher.csproj` — application entrypoint and project
-- `build-release.cmd` — Windows release build
-- `client-manifest.example.json` — nonfunctional sample client manifest
-- `docs/LEGACY_SOURCE_README.md` — historical documentation from the older prototype
+```powershell
+dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:UnionDefaultApiOrigin=https://union.cool
+```
 
-## Known limitations and security
+Without an embedded signing key this is a **development-only build** and cannot self-update. The project version is `0.2.3` for the bootstrap candidate; no release has been certified merely by committing these files.
 
-- The example manifest has placeholders and is **not** a downloadable client release.
-- A SHA-256 from the same untrusted client manifest as the archive is **not** an authentic signature of the publisher.
-- The launcher is not a full standalone installer and does not guarantee a secure automatic update when no trusted key is configured.
-- Independent clean-machine testing, package review and update-signing review are required before wider release.
-- Do not distribute third-party clients/assets without the appropriate rights, or publish private credentials, tokens, signing keys, RCCService binaries or server configuration.
+## Security boundaries
 
-## License
+- Keep the private RSA signing key outside GitHub, CI and the VPS. Only the public key is distributed.
+- GitHub Actions artifacts and Inno Setup output are **not Authenticode signed**; SmartScreen warnings may still occur.
+- A client ZIP hash from the same unsigned manifest does not establish publisher authenticity. Review client distribution separately.
+- Updating only replaces the launcher installation. It must not delete Roblox client files, RCCService or user settings.
+- A previous unsigned/unkeyed launcher cannot self-update into the signed-key updater. One manual installer upgrade is required.
+- Review third-party client and asset distribution rights before public release.
 
-Project-owned code is distributed under [GNU GPL v3.0](LICENSE). Third-party software, trademarks and assets are not granted rights under this license.
+License: [GNU GPL v3.0](LICENSE) for project-owned code only.
