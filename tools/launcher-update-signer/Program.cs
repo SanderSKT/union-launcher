@@ -72,9 +72,41 @@ try
         Console.WriteLine($"Signed launcher update v{version}, {fi.Length} bytes, SHA-256 {hash}");
         Console.WriteLine("Release folder: " + dest);
     }
+    else if (args.Length == 4 && args[0] == "verify")
+    {
+        var manifestPath = Path.GetFullPath(args[1]);
+        var setupPath = Path.GetFullPath(args[2]);
+        var publicPath = Path.GetFullPath(args[3]);
+        using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var json = doc.RootElement;
+        var version = json.GetProperty("version").GetString() ?? throw new IOException("Missing version.");
+        var url = json.GetProperty("downloadUrl").GetString() ?? throw new IOException("Missing URL.");
+        var sha = json.GetProperty("sha256").GetString() ?? throw new IOException("Missing digest.");
+        var size = json.GetProperty("sizeBytes").GetInt64();
+        var sig = json.GetProperty("signature").GetString() ?? throw new IOException("Missing signature.");
+        ValidateVersion(version);
+        if (!Regex.IsMatch(sha, @"^[0-9a-f]{64}$")) throw new IOException("Invalid digest.");
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps || uri.Host != "union.cool" ||
+            uri.AbsolutePath != "/api/union/launcher/installer" ||
+            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new IOException("Unexpected public installer URL.");
+        var fi = new FileInfo(setupPath);
+        if (!fi.Exists || fi.Length != size) throw new IOException("Installer size mismatch.");
+        var actual = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(setupPath))).ToLowerInvariant();
+        if (!CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(actual), Convert.FromHexString(sha)))
+            throw new IOException("Installer SHA-256 does not match manifest.");
+        using var rsa = RSA.Create();
+        rsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(File.ReadAllText(publicPath).Trim()), out _);
+        if (!rsa.VerifyData(Encoding.UTF8.GetBytes(SignedText(version, size, sha, url)),
+                Convert.FromBase64String(sig), HashAlgorithmName.SHA256, RSASignaturePadding.Pss))
+            throw new IOException("SIGNATURE VERIFICATION FAILED.");
+        Console.WriteLine("VERIFIED: v" + version + ", signed manifest and installer SHA-256 match pinned key.");
+    }
     else
     {
-        Console.Error.WriteLine("Usage:\n  keygen <private-folder>\n  publish <setup.exe> <version> <https-installer-url> <private.pk8> <empty-output-dir>");
+        Console.Error.WriteLine("Usage:\n  keygen <private-folder>\n  publish <setup.exe> <version> <https-installer-url> <private.pk8> <empty-output-dir>\n  verify <manifest.json> <setup.exe> <public.spki.b64>");
         Environment.ExitCode = 2;
     }
 }
