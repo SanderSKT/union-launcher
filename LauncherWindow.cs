@@ -57,7 +57,7 @@ internal sealed class LauncherWindow : Form
     public LauncherWindow(string? launchUri)
     {
         _launchUri = launchUri;
-        Text = "UNION Launcher | Closed Alpha";
+        Text = "UNION Launcher | Closed Alpha | v" + (typeof(LauncherWindow).Assembly.GetName().Version?.ToString(3) ?? "0.2.4");
         ClientSize = new Size(590, 465);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;

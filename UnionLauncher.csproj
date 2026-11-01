@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>UnionLauncher</AssemblyName>
     <RootNamespace>UnionLauncher</RootNamespace>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>

@@ -12,7 +12,7 @@ Official source for the Windows **UNION Launcher** — an independent, closed-al
 
 ## Self-update bootstrap (v0.2.3)
 
-**Signing is disabled until the project owner generates and commits the PUBLIC verification key.**
+**The public verification key is pinned in this repository.** The private key never belongs in GitHub or on the VPS.
 
 On a trusted Windows PC with .NET 10 SDK and Git, clone this repo. Run:
 
@@ -24,7 +24,7 @@ This generates an RSA key pair **outside this repository**, under your user prof
 
 The next GitHub Actions build will embed the public key. It will produce both a portable test EXE and an unsigned **Inno Setup installer** (each with SHA-256 checksums). Download `union-setup-win-x64-unsigned` from Actions, extract `UNIONSetup.exe`, and test it on the existing Windows VM or a separate Windows account. This is a **one-time manual installation** for existing launchers without an embedded key. The installer preserves client files in `%LOCALAPPDATA%/UNION`, uses the same AppId for subsequent upgrades, and registers `union://` with the user's consent if another handler already owns it.
 
-## Subsequent update releases (e.g. v0.2.4)
+## Subsequent update releases (v0.2.4 test)
 
 1. Update the source and bump `<Version>` in `UnionLauncher.csproj` (never reuse an existing version number for different bytes).
 2. Build/download the versioned `UNIONSetup.exe` with the **same pinned public key**.
@@ -46,7 +46,7 @@ The official public endpoint paths are `GET /api/union/launcher/update` and `GET
 dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:UnionDefaultApiOrigin=https://union.cool
 ```
 
-Without an embedded signing key this is a **development-only build** and cannot self-update. The project version is `0.2.3` for the bootstrap candidate; no release has been certified merely by committing these files.
+Without an embedded signing key this is a **development-only build** and cannot self-update. The project version is `0.2.4` for the first signed-update candidate. Install v0.2.3 on the test VM first, then publish a signed v0.2.4 on the VPS. No public release is certified merely by committing these files.
 
 ## Security boundaries
 
