@@ -24,17 +24,17 @@ This generates an RSA key pair **outside this repository**, under your user prof
 
 The next GitHub Actions build will embed the public key. It will produce both a portable test EXE and an unsigned **Inno Setup installer** (each with SHA-256 checksums). Download `union-setup-win-x64-unsigned` from Actions, extract `UNIONSetup.exe`, and test it on the existing Windows VM or a separate Windows account. This is a **one-time manual installation** for existing launchers without an embedded key. The installer preserves client files in `%LOCALAPPDATA%/UNION`, uses the same AppId for subsequent upgrades, and registers `union://` with the user's consent if another handler already owns it.
 
-## Subsequent update releases (v0.2.4 test)
+## Subsequent update releases (v0.2.5 test)
 
 1. Update the source and bump `<Version>` in `UnionLauncher.csproj` (never reuse an existing version number for different bytes).
 2. Build/download the versioned `UNIONSetup.exe` with the **same pinned public key**.
 3. On the trusted PC, sign a manifest offline:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Sign-LauncherRelease.ps1 -Version 0.2.4 -SetupFile "C:\path\to\UNIONSetup.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Sign-LauncherRelease.ps1 -Version 0.2.5 -SetupFile "C:\path\to\UNIONSetup.exe"
 ```
 
-4. Copy only `UNIONSetup.exe` and `manifest.json` from `installer/signed-releases/0.2.4/` to the VPS. **Never upload the private key.**
+4. Copy only `UNIONSetup.exe` and `manifest.json` from `installer/signed-releases/0.2.5/` to the VPS. **Never upload the private key.**
 5. On the VPS, install the isolated PHP routes once using `server/Install-UpdateRoutes.ps1`, then use `server/Stage-UpdateRelease.ps1 -SourceDirectory ...` to stage a release. The update API defaults to **disabled**. Only after verifying the deployment should you set `launcher_updates_enabled => true` in your private PHP config.
 6. Launch the signed-key bootstrap installer normally. On subsequent starts it checks `https://union.cool/api/union/launcher/update`. If an update is available and its signature verifies, the user can install it.
 
@@ -46,7 +46,7 @@ The official public endpoint paths are `GET /api/union/launcher/update` and `GET
 dotnet publish UnionLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:UnionDefaultApiOrigin=https://union.cool
 ```
 
-Without an embedded signing key this is a **development-only build** and cannot self-update. The project version is `0.2.4` for the first signed-update candidate. Install v0.2.3 on the test VM first, then publish a signed v0.2.4 on the VPS. No public release is certified merely by committing these files.
+Without an embedded signing key this is a **development-only build** and cannot self-update. The project version is `0.2.5` for the first signed-update candidate. Install v0.2.3 on the test VM first, then publish a signed v0.2.5 on the VPS. No public release is certified merely by committing these files.
 
 ## Security boundaries
 
@@ -58,3 +58,11 @@ Without an embedded signing key this is a **development-only build** and cannot 
 - Review third-party client and asset distribution rights before public release.
 
 License: [GNU GPL v3.0](LICENSE) for project-owned code only.
+
+## Incident: incorrectly labeled v0.2.4 test update
+
+A v0.2.3 installer was mistakenly signed and served as v0.2.4. Disable the former
+update endpoint and DO NOT reuse the old v0.2.4 package. Version 0.2.5 supersedes it.
+The offline signer, staging scripts and CI now validate the real Windows executable
+version resource before signing or staging. Build outputs must use the exact matching
+GitHub Actions run; checksum and RSA verification alone do not establish semantic version.

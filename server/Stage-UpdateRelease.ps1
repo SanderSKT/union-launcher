@@ -19,6 +19,11 @@ if ($m.version -notmatch '^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$' -or
     throw 'Malformed or unexpected launcher manifest.'
 }
 $f = Get-Item -LiteralPath $installerPath
+$meta = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($f.FullName)
+$actualVersion = "{0}.{1}.{2}" -f $meta.FileMajorPart, $meta.FileMinorPart, $meta.FileBuildPart
+if ($actualVersion -cne $m.version -or $meta.FilePrivatePart -ne 0) {
+    throw "Installer metadata declares $actualVersion but manifest says $($m.version). Refusing to stage."
+}
 $hash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($f.Length -ne $m.sizeBytes -or $hash -cne $m.sha256) {
     throw 'Installer does not match the signed manifest bytes/hash.'

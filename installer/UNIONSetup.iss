@@ -1,6 +1,6 @@
 #define MyAppName "UNION Launcher"
 #ifndef MyAppVersion
-#define MyAppVersion "0.2.3"
+#define MyAppVersion "0.2.5"
 #endif
 #define MyAppExeName "UnionLauncher.exe"
 
@@ -8,6 +8,10 @@
 AppId={{C4ABDD40-8A59-4DE9-9DB9-A6136BD0246B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
 AppPublisher=UNION
 AppPublisherURL=https://union.cool
 AppSupportURL=https://union.cool

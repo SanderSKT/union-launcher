@@ -21,30 +21,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Verify RSA-PSS signing round-trip (ephemeral CI key)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP "union-signature-smoke"
-          $keys = Join-Path $root "keys"
-          $release = Join-Path $root "release"
-          New-Item -ItemType Directory -Force -Path $root | Out-Null
-          $fakeSetup = Join-Path $root "test-installer.exe"
-          [IO.File]::WriteAllBytes($fakeSetup, [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(1024))
-          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- keygen $keys
-          if ($LASTEXITCODE -ne 0) { throw "Ephemeral key generation failed" }
-          $private = Join-Path $keys "launcher-update-private.pk8"
-          $public = Join-Path $keys "launcher-update-public.spki.b64"
-          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- publish $fakeSetup "99.1.0" "https://union.cool/api/union/launcher/installer" $private $release
-          if ($LASTEXITCODE -ne 0) { throw "Round-trip signing failed" }
-          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- verify (Join-Path $release "manifest.json") (Join-Path $release "UNIONSetup.exe") $public
-          if ($LASTEXITCODE -ne 0) { throw "Valid signature was not accepted" }
-          [IO.File]::AppendAllText((Join-Path $release "UNIONSetup.exe"), "tampering")
-          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- verify (Join-Path $release "manifest.json") (Join-Path $release "UNIONSetup.exe") $public *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Tampered installer was ACCEPTED" }
-          Write-Host "Signing verification and tamper detection passed."
-          $global:LASTEXITCODE = 0
-
       - name: Build portable launcher (public key optional)
         shell: pwsh
         run: |
@@ -112,6 +88,32 @@ jobs:
           if (!(Test-Path -LiteralPath $exe)) { throw "Installer was not produced" }
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  UNIONSetup.exe" | Set-Content installer/SHA256SUMS.txt -Encoding ascii
+
+      - name: Verify RSA-PSS signing round-trip (ephemeral CI key)
+        if: hashFiles('update-signing/launcher-update-public.spki.b64') != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "union-signature-smoke"
+          $keys = Join-Path $root "keys"
+          $release = Join-Path $root "release"
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          $fakeSetup = "installer/output/UNIONSetup.exe"
+          $version = [string]([xml](Get-Content -LiteralPath UnionLauncher.csproj -Raw)).Project.PropertyGroup.Version
+          if (!(Test-Path -LiteralPath $fakeSetup)) { throw "Real Inno Setup installer not found." }
+          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- keygen $keys
+          if ($LASTEXITCODE -ne 0) { throw "Ephemeral key generation failed" }
+          $private = Join-Path $keys "launcher-update-private.pk8"
+          $public = Join-Path $keys "launcher-update-public.spki.b64"
+          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- publish $fakeSetup $version "https://union.cool/api/union/launcher/installer" $private $release
+          if ($LASTEXITCODE -ne 0) { throw "Round-trip signing failed" }
+          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- verify (Join-Path $release "manifest.json") (Join-Path $release "UNIONSetup.exe") $public
+          if ($LASTEXITCODE -ne 0) { throw "Valid signature was not accepted" }
+          [IO.File]::AppendAllText((Join-Path $release "UNIONSetup.exe"), "tampering")
+          & dotnet run --project tools/launcher-update-signer/LauncherUpdateSigner.csproj -- verify (Join-Path $release "manifest.json") (Join-Path $release "UNIONSetup.exe") $public *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Tampered installer was ACCEPTED" }
+          Write-Host "Signing verification and tamper detection passed."
+          $global:LASTEXITCODE = 0
 
       - name: Upload installer (for manual testing; not yet a Release)
         if: hashFiles('update-signing/launcher-update-public.spki.b64') != ''

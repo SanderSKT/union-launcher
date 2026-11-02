@@ -25,6 +25,13 @@ if (!(Test-Path -LiteralPath $SetupFile -PathType Leaf)) { throw "Installer miss
 if ((Test-Path $OutputDirectory) -and (@(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count -gt 0)) {
     throw 'Output directory is not empty. Do not overwrite a signed release.'
 }
+# Verify the embedded version in the Windows setup executable, not just ZIP filename.
+$meta = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $SetupFile).Path)
+$actual = "{0}.{1}.{2}" -f $meta.FileMajorPart, $meta.FileMinorPart, $meta.FileBuildPart
+if ($actual -cne $Version -or $meta.FilePrivatePart -ne 0) {
+    throw "WRONG INSTALLER: EXE version $actual vs expected $Version. Download the correct GitHub Actions artifact."
+}
+Write-Host "Installer embedded version verified: $actual" -ForegroundColor Green
 $project = Join-Path $root 'tools\launcher-update-signer\LauncherUpdateSigner.csproj'
 $url = $origin.AbsoluteUri.TrimEnd('/') + '/api/union/launcher/installer'
 & dotnet run --project $project -- publish $SetupFile $Version $url $PrivateKeyFile $OutputDirectory

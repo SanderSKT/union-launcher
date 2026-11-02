@@ -14,6 +14,17 @@ static void ValidateVersion(string value)
     _ = Version.Parse(value);
 }
 
+// Fail closed when an old installer is mislabeled as a newer update.
+static void ValidateSetupVersion(string setupPath, string declaredVersion)
+{
+    var expected = Version.Parse(declaredVersion);
+    var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(setupPath);
+    var actual = new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart, info.FilePrivatePart);
+    var required = new Version(expected.Major, expected.Minor, expected.Build, 0);
+    if (actual != required)
+        throw new IOException($"Installer EXE version {actual} differs from declared release v{declaredVersion}. Refusing.");
+}
+
 try
 {
     if (args.Length == 2 && args[0] == "keygen")
@@ -45,6 +56,7 @@ try
             throw new ArgumentException("Installer URL must use HTTPS (HTTP only on localhost) and end with /api/union/launcher/installer.");
         if (!File.Exists(setup) || !File.Exists(privateKey))
             throw new FileNotFoundException("Missing setup or private key.");
+        ValidateSetupVersion(setup, version);
         if (Directory.Exists(dest) && Directory.EnumerateFileSystemEntries(dest).Any())
             throw new IOException("The target release directory must be empty. Refusing overwrite.");
         using var rsa = RSA.Create();
@@ -85,6 +97,7 @@ try
         var size = json.GetProperty("sizeBytes").GetInt64();
         var sig = json.GetProperty("signature").GetString() ?? throw new IOException("Missing signature.");
         ValidateVersion(version);
+        ValidateSetupVersion(setupPath, version);
         if (!Regex.IsMatch(sha, @"^[0-9a-f]{64}$")) throw new IOException("Invalid digest.");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
             uri.Scheme != Uri.UriSchemeHttps || uri.Host != "union.cool" ||
