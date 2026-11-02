@@ -1,0 +1,80 @@
+name: Publish UNION Launcher v0.2.5 Closed Alpha
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-025-alpha.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-verified-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Download successful v0.2.5 installer build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = gh api repos/SanderSKT/union-launcher/actions/runs/41364998342 | ConvertFrom-Json
+          if ($run.conclusion -cne 'success' -or $run.head_sha -cne '594d0b51789034dbd99f664c89ce5f9dedf96baa') {
+            throw 'The recorded source build is not the verified v0.2.5 run.'
+          }
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          gh run download 41364998342 -R SanderSKT/union-launcher -n union-setup-win-x64-unsigned -D release-assets
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot download verified build artifact.' }
+
+      - name: Validate Windows executable version and checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem release-assets -Recurse -File -Filter UNIONSetup.exe)
+          $sums = @(Get-ChildItem release-assets -Recurse -File -Filter SHA256SUMS.txt)
+          if ($files.Count -ne 1 -or $sums.Count -ne 1) { throw 'Expected exactly one installer and one SHA256SUMS.txt.' }
+          $setup = $files[0].FullName
+          $sum = $sums[0].FullName
+          $metadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($setup)
+          $actualVersion = '{0}.{1}.{2}' -f $metadata.FileMajorPart,$metadata.FileMinorPart,$metadata.FileBuildPart
+          if ($actualVersion -cne '0.2.5' -or $metadata.FilePrivatePart -ne 0) {
+            throw "Refusing to release wrongly versioned installer: $actualVersion"
+          }
+          $expected = ((Get-Content $sum -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash $setup -Algorithm SHA256).Hash
+          if ($actual -ine $expected) { throw 'Installer SHA-256 checksum mismatch.' }
+          Write-Host "Validated UNIONSetup v$actualVersion; sha256=$actual"
+          Copy-Item -LiteralPath $setup -Destination './UNIONSetup.exe' -ErrorAction Stop
+          Copy-Item -LiteralPath $sum -Destination './SHA256SUMS.txt' -ErrorAction Stop
+
+      - name: Publish immutable public closed-alpha release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v0.2.5-alpha'
+          $existing = gh release view $tag -R SanderSKT/union-launcher --json tagName --jq '.tagName' 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing -eq $tag) {
+            throw "Release $tag already exists. Refusing to overwrite public assets."
+          }
+          @'
+          ## UNION Launcher v0.2.5 — Closed Alpha
+
+          Portable native Windows launcher wrapped in a per-user Inno Setup installer.
+          Installs into %LOCALAPPDATA%\Programs\UNION Launcher and registers union://.
+          Downloads the legacy client from the separately operated UNION server after user consent.
+          Does **not** include Roblox client binaries, game files, server binaries or signing keys.
+          
+          Self-update support verifies publisher RSA-PSS signed manifests (separate from Windows Authenticode). Existing player files under %LOCALAPPDATA%\UNION are preserved on upgrade.
+          
+          **Windows 10/11 x64 only. Closed alpha, unsigned Windows binary.**
+          Windows SmartScreen may warn because Authenticode code signing is not yet configured.
+          Verify SHA256SUMS.txt before installing.
+          
+          Not affiliated with or endorsed by Roblox Corporation.
+          '@ | Set-Content -LiteralPath RELEASE_NOTES.md -Encoding utf8
+          gh release create $tag "./UNIONSetup.exe" "./SHA256SUMS.txt" -R SanderSKT/union-launcher --target "594d0b51789034dbd99f664c89ce5f9dedf96baa" --title "UNION Launcher v0.2.5 (Closed Alpha)" --notes-file RELEASE_NOTES.md --prerelease
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed.' }
